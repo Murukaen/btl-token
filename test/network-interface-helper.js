@@ -1,120 +1,63 @@
-
 var web3Utils = require('web3-utils')
-//var ContractInterface = require("../contracts/DeployedContractInfo")
-
-
 const Tx = require('ethereumjs-tx')
-
-
 var busySendingSolution = false;
 var queuedMiningSolutions = [];
-
-
 var lastSubmittedMiningSolutionChallengeNumber;
 
 module.exports =  {
-
-
-  init(web3,tokenContract,account)
-  {
-    this.web3=web3;
-    this.tokenContract = tokenContract;
-    this.account=account;
-
-    busySendingSolution = false;
-
-    setInterval(function(){ this.sendMiningSolutions()}.bind(this), 500)
-
-  },
-
-
-
-    async checkMiningSolution(addressFrom,solution_number,challenge_digest,challenge_number,target,callback){
-
-      this.tokenContract.methods.checkMintSolution(solution_number,challenge_digest, challenge_number, target).call(callback)
-
+    init(web3,tokenContract,account) {
+        this.web3=web3;
+        this.tokenContract = tokenContract;
+        this.account=account;
+        busySendingSolution = false;
+        setInterval(function(){ this.sendMiningSolutions()}.bind(this), 500)
     },
+        async checkMiningSolution(addressFrom,solution_number,challenge_digest,challenge_number,target,callback){
+        this.tokenContract.methods.checkMintSolution(solution_number,challenge_digest, challenge_number, target).call(callback)
+    },
+    async sendMiningSolutions() {
+        if(busySendingSolution == false) {
+            if(queuedMiningSolutions.length > 0) {
+                busySendingSolution = true;
+                var nextSolution = queuedMiningSolutions.pop();
 
-
-  async sendMiningSolutions()
-    {
-
-
-    //  console.log( 'sendMiningSolutions' )
-      if(busySendingSolution == false)
-      {
-        if(queuedMiningSolutions.length > 0)
-        {
-          busySendingSolution = true;
-          var nextSolution = queuedMiningSolutions.pop();
-
-          if( nextSolution.challenge_number != lastSubmittedMiningSolutionChallengeNumber)
-          {
-            lastSubmittedMiningSolutionChallengeNumber =  nextSolution.challenge_number;
-            console.log('popping mining solution off stack ')
-
-            try{
-            var response = await this.submitMiningSolution(nextSolution.addressFrom,
-              nextSolution.solution_number, nextSolution.challenge_digest);
-            }catch(e)
-            {
+            if( nextSolution.challenge_number != lastSubmittedMiningSolutionChallengeNumber) {
+                lastSubmittedMiningSolutionChallengeNumber =  nextSolution.challenge_number;
+                console.log('popping mining solution off stack ')
+                try {
+                    var response = await this.submitMiningSolution(nextSolution.addressFrom,
+                    nextSolution.solution_number, nextSolution.challenge_digest);
+                } catch(e) {
               console.log(e);
             }
           }
-
-
           console.log('response',response)
           busySendingSolution = false;
         }
       }
-
-
-
     },
-
-
-
-  queueMiningSolution(addressFrom,solution_number,challenge_digest, challenge_number)
-  {
-
-    console.log('pushed solution to stack')
-    queuedMiningSolutions.push({
-      addressFrom: addressFrom,
-      solution_number: solution_number,
-      challenge_digest: challenge_digest,
-      challenge_number: challenge_number
-    });
-
-  },
-
-  async submitMiningSolution(addressFrom,solution_number,challenge_digest){
-
-    //  var addressFrom = this.vault.getAccount().public_address ;
-
-
-    console.log( 'submitMiningSolution' )
-    console.log( 'solution_number',solution_number )
-    console.log( 'challenge_digest',challenge_digest )
-
-
-
-  try{
-    var txCount = await this.web3.eth.getTransactionCount(addressFrom);
-    console.log('txCount',txCount)
-   } catch(error) {  //here goes if someAsyncPromise() rejected}
-    console.log(error);
-     return error;    //this will result in a resolved promise.
-   }
-
-   //var mintMethod = this.tokenContract.mint(solution_number,challenge_digest);
-
-//   var mintData = this.tokenContract.mint.getData(solution_number, challenge_digest);
-
-   var addressTo = this.tokenContract.address;
-
-
-
-    var txData = this.web3.eth.abi.encodeFunctionCall({
+    queueMiningSolution(addressFrom,solution_number,challenge_digest, challenge_number) {
+        console.log('pushed solution to stack')
+            queuedMiningSolutions.push({
+            addressFrom: addressFrom,
+            solution_number: solution_number,
+            challenge_digest: challenge_digest,
+            challenge_number: challenge_number
+        });
+    },
+    async submitMiningSolution(addressFrom,solution_number,challenge_digest){
+        //  var addressFrom = this.vault.getAccount().public_address ;
+        try{
+            var txCount = await this.web3.eth.getTransactionCount(addressFrom);
+            console.log('txCount',txCount)
+        } catch(error) {  //here goes if someAsyncPromise() rejected}
+            console.log(error);
+            return error;    //this will result in a resolved promise.
+        }
+        //var mintMethod = this.tokenContract.mint(solution_number,challenge_digest);
+        //   var mintData = this.tokenContract.mint.getData(solution_number, challenge_digest);
+        var addressTo = this.tokenContract.address;
+        var txData = this.web3.eth.abi.encodeFunctionCall({
             name: 'mint',
             type: 'function',
             inputs: [{

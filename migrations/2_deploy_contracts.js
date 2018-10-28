@@ -1,5 +1,7 @@
-var _0xBitcoinToken = artifacts.require("./_0xBitcoinToken.sol");
+var BTLToken = artifacts.require("./BTLToken.sol")
+var TestContract = artifacts.require("./TestContract.sol")
 
 module.exports = function(deployer) {
-  deployer.deploy(_0xBitcoinToken);
+  deployer.deploy(BTLToken)
+  deployer.deploy(TestContract)
 };
