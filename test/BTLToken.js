@@ -2,6 +2,13 @@ const BTLToken = artifacts.require("./BTLToken.sol")
 const abi = require('ethereumjs-abi')
 const BN = require('bn.js')
 
+function buildDigest(challengeNumber, sender, nonce) {
+    return abi.soliditySHA3(
+        ["bytes32", "address", "uint"],
+        [challengeNumber, sender, nonce]
+    ).toString('hex')
+}
+
 contract('BTLToken', (accounts) => {
     it("initializes the contract with the correct values", async () => {
         const contract = await BTLToken.deployed()
@@ -24,21 +31,33 @@ contract('BTLToken', (accounts) => {
         console.log("miningReward: ", miningReward.toString(16))
         let initialBalance = await contract.balanceOf.call(sender)
         assert.equal(initialBalance.toNumber(), 0, "Initial balance should be 0")
-
-        const N = 10**7
-        const step = 10**4
+        // mint attempt with wrong digest shld fail
+        try {
+            await contract.mint(1, '0x' + '0'.repeat(32))
+            assert.fail()
+        } catch (err) {
+            assert.ok(/Digest mismatch/.test(err))
+            assert.ok(/revert/.test(err))
+        }
+        // mint attempt with digest above target shld fail
+        try {
+            let nonce = new BN(1)
+            let digest = buildDigest(challengeNumber, sender, nonce)
+            await contract.mint('0x' + nonce.toString(16), '0x' + digest)
+            assert.fail()
+        } catch (err) {
+            assert.ok(/Digest is not within required bounds/.test(err))
+            assert.ok(/revert/.test(err))
+        }
+        const N = 10**7 // number of nonce attempts
+        const step = 10**4 // mining log step
         solutionFound = false
         for(i=0; i < N; i++) {
             if (i%step == 0) {
                 console.log(`mining step [${i/step}/${N/step - 1}]`)
             }
             let nonce = new BN(i)
-
-            let digest = abi.soliditySHA3(
-                ["bytes32", "address", "uint"],
-                [challengeNumber, sender, nonce]
-            ).toString('hex')
-
+            let digest = buildDigest(challengeNumber, sender, nonce)
             if (new BN(digest, 16).lt(miningTarget)) {
                 let result = await contract.mint('0x' + nonce.toString(16), '0x' + digest, {from: sender})
                 console.log("tx result: ", result)
