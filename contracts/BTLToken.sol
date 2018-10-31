@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.4.22;
 
 import "./SafeMath.sol";
 
@@ -77,25 +77,21 @@ contract Owned {
     }
 }
 
-// ----------------------------------------------------------------------------
-// ERC20 Token, with the addition of symbol, name and decimals and an
-// initial fixed supply
-// ----------------------------------------------------------------------------
 contract BTLToken is ERC20Interface, Owned {
     using SafeMath for uint;
     using ExtendedMath for uint;
 
     string public symbol;
-    string public  name;
+    string public name;
     uint8 public decimals;
     uint public _totalSupply;
     uint public latestDifficultyPeriodStarted;
     uint public epochCount;//number of 'blocks' mined
     uint public _BLOCKS_PER_READJUSTMENT = 1024;
     //a little number
-    uint public  _MINIMUM_TARGET = 2**16;
+    uint public _MINIMUM_TARGET = 2**16;
     //a big number is easier ; just find a solution that is smaller
-    uint public  _MAXIMUM_TARGET = 2**234; // bitcoin uses 224
+    uint public _MAXIMUM_TARGET = 2**234; // bitcoin uses 224
     uint public miningTarget;
     bytes32 public challengeNumber;   //generate a new one when a new reward is minted
     uint public rewardEra;
@@ -103,7 +99,6 @@ contract BTLToken is ERC20Interface, Owned {
     address public lastRewardTo;
     uint public lastRewardAmount;
     uint public lastRewardEthBlockNumber;
-    bool locked = false;
     mapping(bytes32 => bytes32) solutionForChallenge;
     uint public tokensMinted;
     mapping(address => uint) balances;
@@ -115,18 +110,12 @@ contract BTLToken is ERC20Interface, Owned {
         name = "BTL Token";
         decimals = 8;
         _totalSupply = 21000000 * 10**uint(decimals);
-        if(locked) revert();
-        locked = true;
         tokensMinted = 0;
         rewardEra = 0;
         maxSupplyForEra = _totalSupply.div(2);
         miningTarget = _MAXIMUM_TARGET;
         latestDifficultyPeriodStarted = block.number;
         _startNewMiningEpoch();
-
-        //The owner gets nothing! You must mine this ERC20 token
-        //balances[owner] = _totalSupply;
-        //Transfer(address(0), owner, _totalSupply);
     }
 
     function mint(uint256 nonce, bytes32 challenge_digest) public returns (bool success) {
@@ -172,20 +161,18 @@ contract BTLToken is ERC20Interface, Owned {
 
         //40 is the final reward era, almost all tokens minted
         //once the final era is reached, more tokens will not be given out because the assert function
-        if( tokensMinted.add(getMiningReward()) > maxSupplyForEra && rewardEra < 39)
-        {
+        if(tokensMinted.add(getMiningReward()) > maxSupplyForEra && rewardEra < 39) {
             rewardEra = rewardEra + 1;
         }
 
         //set the next minted supply at which the era will change
-        // total supply is 2100000000000000  because of 8 decimal places
-        maxSupplyForEra = _totalSupply - _totalSupply.div( 2**(rewardEra + 1));
+        //total supply is 2100000000000000  because of 8 decimal places
+        maxSupplyForEra = _totalSupply - _totalSupply.div(2**(rewardEra + 1));
 
         epochCount = epochCount.add(1);
 
         //every so often, readjust difficulty. Dont readjust when deploying
-        if(epochCount % _BLOCKS_PER_READJUSTMENT == 0)
-        {
+        if(epochCount % _BLOCKS_PER_READJUSTMENT == 0) {
             _reAdjustDifficulty();
         }
 
@@ -260,7 +247,7 @@ contract BTLToken is ERC20Interface, Owned {
 
         //every reward era, the reward amount halves.
 
-        return (50 * 10**uint(decimals) ).div( 2**rewardEra ) ;
+        return (50 * 10**uint(decimals)).div(2**rewardEra);
     }
 
     //help debug mining software
@@ -288,7 +275,6 @@ contract BTLToken is ERC20Interface, Owned {
     // ------------------------------------------------------------------------
     // Get the token balance for account `tokenOwner`
     // ------------------------------------------------------------------------
-
     function balanceOf(address tokenOwner) public constant returns (uint balance) {
         return balances[tokenOwner];
     }
