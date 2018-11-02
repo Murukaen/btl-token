@@ -61,11 +61,12 @@ contract BTLToken is IERC20, Ownable {
     mapping(address => mapping(address => uint)) allowed;
     event Mint(address indexed from, uint reward_amount, uint epochCount, bytes32 newChallengeNumber);
 
-    constructor () public {
+    constructor (uint ownerBalancePercentage) public {
         symbol = "BTL";
         name = "BTL Token";
         decimals = 8;
         _totalSupply = 21000000 * 10**uint(decimals);
+        balances[msg.sender] = _totalSupply.mul(ownerBalancePercentage).div(100);
         tokensMinted = 0;
         rewardEra = 0;
         maxSupplyForEra = _totalSupply.div(2);
@@ -221,11 +222,8 @@ contract BTLToken is IERC20, Ownable {
         return (digest == challenge_digest);
     }
 
-    // ------------------------------------------------------------------------
-    // Total supply
-    // ------------------------------------------------------------------------
-    function totalSupply() public constant returns (uint) {
-        return _totalSupply  - balances[address(0)];
+    function totalSupply() public view returns (uint) {
+        return _totalSupply;
     }
 
     // ------------------------------------------------------------------------

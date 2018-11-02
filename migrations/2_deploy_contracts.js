@@ -1,5 +1,5 @@
-var BTLToken = artifacts.require("./BTLToken.sol")
+const BTLToken = artifacts.require("./BTLToken.sol")
 
 module.exports = function(deployer) {
-  deployer.deploy(BTLToken)
+  deployer.deploy(BTLToken, 0)
 };
