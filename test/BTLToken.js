@@ -41,6 +41,7 @@ contract('BTLToken', (accounts) => {
             assert.ok(/Digest is not within required bounds/.test(err))
             assert.ok(/revert/.test(err))
         }
+        // look for valid digest
         await miningHelper.mine(contract, sender)
         let balance = await contract.balanceOf.call(sender)
         assert.equal(balance.toNumber(), miningReward.toNumber(), "Balance after mint should equal mining reward")

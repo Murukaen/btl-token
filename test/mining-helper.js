@@ -9,16 +9,25 @@ module.exports = {
             [challengeNumber, sender, nonce]
         ).toString('hex')
     },
+    bigNumberToBN(bigNumber) {
+        return new BN(bigNumber.toString(16), 16)
+    },
     async mine(contract, sender, tries = 10 ** 7) {
         const challengeNumber = await contract.getChallengeNumber.call() // string
         const receivedMiningTarget = await contract.getMiningTarget.call() // BigNumber
-        const miningTarget = new BN(receivedMiningTarget.toString(16), 16) 
+        const miningTarget = this.bigNumberToBN(receivedMiningTarget) 
         const receivedMininingReward = await contract.getMiningReward.call()
-        const miningReward = new BN(receivedMininingReward.toString(16), 16)
+        const miningReward = this.bigNumberToBN(receivedMininingReward)
+        const receivedTokensMinted = await contract.tokensMinted.call()
+        const tokensMinted = this.bigNumberToBN(receivedTokensMinted)
+        const receivedCummulativeEraMaxSupply = await contract.cummulativeEraMaxSupply.call()
+        const cummulativeEraMaxSupply = this.bigNumberToBN(receivedCummulativeEraMaxSupply)
         console.log("challengeNumber: ", challengeNumber);
         console.log("sender: ", sender);
         console.log("miningTarget: ", miningTarget.toString(16))
         console.log("miningReward: ", miningReward.toString(16))
+        console.log("tokensMinted: ", tokensMinted.toString(16))
+        console.log("cummulativeEraMaxSupply: ", cummulativeEraMaxSupply.toString(16))
         const step = tries / 100
         let solutionFound = false
         let progressBar = new ProgressBar('attempt mine [:bar] :percent', { total: 100, width: 50 })

@@ -1,8 +1,8 @@
-pragma solidity ^0.4.22;
+pragma solidity ^0.4.24;
 
 import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 import "openzeppelin-solidity/contracts/math/SafeMath.sol";
-import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 
 // ----------------------------------------------------------------------------
 // 'BTL Token' contract
@@ -11,9 +11,6 @@ import "openzeppelin-solidity/contracts/token/ERC20/IERC20.sol";
 //
 // Symbol      : BTL
 // Name        : BTL Token
-// Total supply: TODO:
-// Decimals    : TODO:
-// 
 // ----------------------------------------------------------------------------
 
 library ExtendedMath {
@@ -24,25 +21,14 @@ library ExtendedMath {
     }
 }
 
-// ----------------------------------------------------------------------------
-// Contract function to receive approval and execute function in one call
-//
-// Borrowed from MiniMeToken
-// ----------------------------------------------------------------------------
-contract ApproveAndCallFallBack {
-    function receiveApproval(address from, uint256 tokens, address token, bytes data) public;
-}
-
-contract BTLToken is IERC20, Ownable {
-    using SafeMath for uint;
+contract BTLToken is ERC20, Ownable {
     using ExtendedMath for uint;
 
-    string public symbol;
-    string public name;
+    string public symbol = "BTL";
+    string public name = "BTL Token";
     uint8 public decimals;
-    uint public _totalSupply;
     uint public latestDifficultyPeriodStarted;
-    uint public epochCount;//number of 'blocks' mined
+    uint public blockCount;//number of 'blocks' mined
     uint public _BLOCKS_PER_READJUSTMENT = 1024;
     //a little number
     uint public _MINIMUM_TARGET = 2**16;
@@ -50,35 +36,36 @@ contract BTLToken is IERC20, Ownable {
     uint public _MAXIMUM_TARGET = 2**234; // bitcoin uses 224
     uint public miningTarget;
     bytes32 public challengeNumber;   //generate a new one when a new reward is minted
-    uint public rewardEra;
-    uint public maxSupplyForEra;
+    uint public rewardEra = 0;
+    uint public cummulativeEraMaxSupply;
     address public lastRewardTo;
     uint public lastRewardAmount;
     uint public lastRewardEthBlockNumber;
     mapping(bytes32 => bytes32) solutionForChallenge;
-    uint public tokensMinted;
-    mapping(address => uint) balances;
-    mapping(address => mapping(address => uint)) allowed;
-    event Mint(address indexed from, uint reward_amount, uint epochCount, bytes32 newChallengeNumber);
+    uint public tokensMinted = 0;
+    event Mint(address indexed from, uint reward_amount, uint blockCount, bytes32 newChallengeNumber);
+    uint public coins_count;
+    uint public blocks_count;
 
-    constructor (uint ownerBalancePercentage) public {
-        symbol = "BTL";
-        name = "BTL Token";
-        decimals = 8;
-        _totalSupply = 21000000 * 10**uint(decimals);
-        balances[msg.sender] = _totalSupply.mul(ownerBalancePercentage).div(100);
-        tokensMinted = 0;
-        rewardEra = 0;
-        maxSupplyForEra = _totalSupply.div(2);
+    constructor (uint _coins_count, uint8 _decimals, uint _blocks_count, uint ownerBalancePercentage) public {
+        coins_count = _coins_count.mul(10**uint(_decimals));
+        blocks_count = _blocks_count;
+        decimals = _decimals;
+        _mint(msg.sender, coins_count.mul(ownerBalancePercentage).div(100));
+        cummulativeEraMaxSupply = coins_count.div(2);
         miningTarget = _MAXIMUM_TARGET;
         latestDifficultyPeriodStarted = block.number;
-        _startNewMiningEpoch();
+        _startNewMiningBlock();
+    }
+
+    function computeMintDigest(bytes32 challenge_number, address addr, uint nonce) public pure returns (bytes32 digest) {
+        digest = keccak256(abi.encodePacked(challenge_number,addr,nonce));
     }
 
     function mint(uint256 nonce, bytes32 challenge_digest) public returns (bool success) {
         //the PoW must contain work that includes a recent ethereum block hash (challenge number) 
         //and the msg.sender's address to prevent MITM attacks
-        bytes32 digest = keccak256(abi.encodePacked(challengeNumber, msg.sender, nonce));
+        bytes32 digest = computeMintDigest(challengeNumber, msg.sender, nonce);
 
         //the challenge digest must match the expected
         if (digest != challenge_digest) revert("Digest mismatch");
@@ -93,43 +80,38 @@ contract BTLToken is IERC20, Ownable {
 
         uint reward_amount = getMiningReward();
 
-        balances[msg.sender] = balances[msg.sender].add(reward_amount);
+        _mint(msg.sender, reward_amount);
 
         tokensMinted = tokensMinted.add(reward_amount);
 
         //Cannot mint more tokens than there are
-        assert(tokensMinted <= maxSupplyForEra);
+        assert(tokensMinted <= cummulativeEraMaxSupply);
 
         //set readonly diagnostics data
         lastRewardTo = msg.sender;
         lastRewardAmount = reward_amount;
         lastRewardEthBlockNumber = block.number;
 
-        _startNewMiningEpoch();
+        _startNewMiningBlock();
 
-        emit Mint(msg.sender, reward_amount, epochCount, challengeNumber);
+        emit Mint(msg.sender, reward_amount, blockCount, challengeNumber);
 
         return true;
     }
 
-    //a new 'block' to be mined
-    function _startNewMiningEpoch() internal {
-        //if max supply for the era will be exceeded next reward round then enter the new era before that happens
-
+    function _startNewMiningBlock() internal {
         //40 is the final reward era, almost all tokens minted
-        //once the final era is reached, more tokens will not be given out because the assert function
-        if(tokensMinted.add(getMiningReward()) > maxSupplyForEra && rewardEra < 39) {
+        if(tokensMinted.add(getMiningReward()) > cummulativeEraMaxSupply && rewardEra < 39) {
             rewardEra = rewardEra + 1;
         }
 
         //set the next minted supply at which the era will change
-        //total supply is 2100000000000000  because of 8 decimal places
-        maxSupplyForEra = _totalSupply - _totalSupply.div(2**(rewardEra + 1));
+        cummulativeEraMaxSupply = coins_count - coins_count.div(2**(rewardEra + 1));
 
-        epochCount = epochCount.add(1);
+        blockCount = blockCount.add(1);
 
         //every so often, readjust difficulty. Dont readjust when deploying
-        if(epochCount % _BLOCKS_PER_READJUSTMENT == 0) {
+        if(blockCount % _BLOCKS_PER_READJUSTMENT == 0) {
             _reAdjustDifficulty();
         }
 
@@ -189,6 +171,7 @@ contract BTLToken is IERC20, Ownable {
     }
 
     //the number of zeroes the digest of the PoW solution requires.  Auto adjusts
+    // TODO: review
     function getMiningDifficulty() public view returns (uint) {
         return _MAXIMUM_TARGET.div(miningTarget);
     }
@@ -199,113 +182,28 @@ contract BTLToken is IERC20, Ownable {
 
     //21m coins total
     //reward begins at 50 and is cut in half every reward era (as tokens are mined)
+    //
+    // Get mining reward for current era
     function getMiningReward() public view returns (uint) {
         //once we get half way thru the coins, only get 25 per block
 
         //every reward era, the reward amount halves.
-
-        return (50 * 10**uint(decimals)).div(2**rewardEra);
+        // TODO:
+        return (10**uint(decimals)).div(2**rewardEra);
     }
 
-    //help debug mining software
-    //TODO: consider removing
-    function getMintDigest(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number) public view returns (bytes32 digesttest) {
-        bytes32 digest = keccak256(abi.encodePacked(challenge_number,msg.sender,nonce));
-        return digest;
-    }
+    function checkMintSolution(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number, uint target) 
+        public view returns (bool success) {
 
-    //help debug mining software
-    //TODO: consider removing
-    function checkMintSolution(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number, uint testTarget) public view returns (bool success) {
-        bytes32 digest = keccak256(abi.encodePacked(challenge_number,msg.sender,nonce));
-        if(uint256(digest) > testTarget) revert();
+        bytes32 digest = computeMintDigest(challenge_number, msg.sender, nonce);
+        require(uint(digest) <= target, "Digest is out of target");
         return (digest == challenge_digest);
-    }
-
-    function totalSupply() public view returns (uint) {
-        return _totalSupply;
-    }
-
-    // ------------------------------------------------------------------------
-    // Get the token balance for account `tokenOwner`
-    // ------------------------------------------------------------------------
-    function balanceOf(address tokenOwner) public constant returns (uint balance) {
-        return balances[tokenOwner];
-    }
-
-    // ------------------------------------------------------------------------
-    // Transfer the balance from token owner's account to `to` account
-    // - Owner's account must have sufficient balance to transfer
-    // - 0 value transfers are allowed
-    // ------------------------------------------------------------------------
-    function transfer(address to, uint tokens) public returns (bool success) {
-        balances[msg.sender] = balances[msg.sender].sub(tokens);
-        balances[to] = balances[to].add(tokens);
-        emit Transfer(msg.sender, to, tokens);
-        return true;
-    }
-
-    // ------------------------------------------------------------------------
-    // Token owner can approve for `spender` to transferFrom(...) `tokens`
-    // from the token owner's account
-    //
-    // https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20-token-standard.md
-    // recommends that there are no checks for the approval double-spend attack
-    // as this should be implemented in user interfaces
-    // ------------------------------------------------------------------------
-    function approve(address spender, uint tokens) public returns (bool success) {
-        allowed[msg.sender][spender] = tokens;
-        emit Approval(msg.sender, spender, tokens);
-        return true;
-    }
-
-    // ------------------------------------------------------------------------
-    // Transfer `tokens` from the `from` account to the `to` account
-    //
-    // The calling account must already have sufficient tokens approve(...)-d
-    // for spending from the `from` account and
-    // - From account must have sufficient balance to transfer
-    // - Spender must have sufficient allowance to transfer
-    // - 0 value transfers are allowed
-    // ------------------------------------------------------------------------
-    function transferFrom(address from, address to, uint tokens) public returns (bool success) {
-        balances[from] = balances[from].sub(tokens);
-        allowed[from][msg.sender] = allowed[from][msg.sender].sub(tokens);
-        balances[to] = balances[to].add(tokens);
-        emit Transfer(from, to, tokens);
-        return true;
-    }
-    // ------------------------------------------------------------------------
-    // Returns the amount of tokens approved by the owner that can be
-    // transferred to the spender's account
-    // ------------------------------------------------------------------------
-    function allowance(address tokenOwner, address spender) public constant returns (uint remaining) {
-        return allowed[tokenOwner][spender];
-    }
-
-    // ------------------------------------------------------------------------
-    // Token owner can approve for `spender` to transferFrom(...) `tokens`
-    // from the token owner's account. The `spender` contract function
-    // `receiveApproval(...)` is then executed
-    // ------------------------------------------------------------------------
-    function approveAndCall(address spender, uint tokens, bytes data) public returns (bool success) {
-        allowed[msg.sender][spender] = tokens;
-        emit Approval(msg.sender, spender, tokens);
-        ApproveAndCallFallBack(spender).receiveApproval(msg.sender, tokens, this, data);
-        return true;
     }
 
     // ------------------------------------------------------------------------
     // Don't accept ETH
     // ------------------------------------------------------------------------
     function () public payable {
-        revert();
-    }
-
-    // ------------------------------------------------------------------------
-    // Owner can transfer out any accidentally sent ERC20 tokens
-    // ------------------------------------------------------------------------
-    function transferAnyERC20Token(address tokenAddress, uint tokens) public onlyOwner returns (bool success) {
-        return IERC20(tokenAddress).transfer(owner(), tokens);
+        revert("Doesn't accept eth");
     }
 }
