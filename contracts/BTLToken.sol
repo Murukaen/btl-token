@@ -192,6 +192,14 @@ contract BTLToken is ERC20, Ownable {
         return (10**uint(decimals)).div(2**rewardEra);
     }
 
+    function getBlockReward(uint blockIndex) public view returns (uint) {
+        int N = int(blocks_count);
+        int M = int(coins_count);
+        int numerator = 6*M*(99*(1 - int(blockIndex) * int(blockIndex)) + 100*(N*N - 1));
+        int denominator = -99*N*(N+1)*(2*N+1) + 6*N*(100*N*N - 1);
+        return uint(numerator / denominator);
+    }
+
     function checkMintSolution(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number, uint target) 
         public view returns (bool success) {
 

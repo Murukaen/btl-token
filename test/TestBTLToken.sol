@@ -18,7 +18,22 @@ contract TestBTLToken {
         Assert.equal(token.totalSupply(), 0, "Contract total supply should match");
         Assert.equal(token.tokensMinted(), 0, "Contract should start with 0 tokens minted");
         Assert.equal(token.cummulativeEraMaxSupply(), coins_count * 10 ** decimals / 2, "Wrong cummulativeEraMaxSupply");
-        // Assert.equal(token.rewardEra(), 0, "Contract should start with 0 for reward era");
+    }
+
+    function testReward() public {
+        BTLToken token = new BTLToken(coins_count, uint8(decimals), blocks_count, 0);
+        Assert.equal(token.getBlockReward(1), 1503, "Reward for block 1 shld match");
+        Assert.equal(token.getBlockReward(2), 1503, "Reward for block 2 shld match");
+        Assert.equal(token.getBlockReward(3), 1502, "Reward for block 3 shld match");
+        Assert.equal(token.getBlockReward(4), 1501, "Reward for block 4 shld match");
+        Assert.equal(token.getBlockReward(5), 1499, "Reward for block 5 shld match");
+        Assert.equal(token.getBlockReward(10), 1488, "Reward for block 10 shld match");
+        Assert.equal(token.getBlockReward(25), 1410, "Reward for block 25 shld match");
+        Assert.equal(token.getBlockReward(50), 1131, "Reward for block 50 shld match");
+        Assert.equal(token.getBlockReward(75), 666, "Reward for block 75 shld match");
+        Assert.equal(token.getBlockReward(90), 297, "Reward for block 90 shld match");
+        Assert.equal(token.getBlockReward(95), 160, "Reward for block 95 shld match");
+        Assert.equal(token.getBlockReward(100), 15, "Reward for block 100 shld match");
     }
 
     function testInitialBalance() public {
