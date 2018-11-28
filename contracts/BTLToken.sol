@@ -36,23 +36,20 @@ contract BTLToken is ERC20, Ownable {
     uint public _MAXIMUM_TARGET = 2**234; // bitcoin uses 224
     uint public miningTarget;
     bytes32 public challengeNumber;   //generate a new one when a new reward is minted
-    uint public rewardEra = 0;
-    uint public cummulativeEraMaxSupply;
     address public lastRewardTo;
     uint public lastRewardAmount;
     uint public lastRewardEthBlockNumber;
     mapping(bytes32 => bytes32) solutionForChallenge;
     uint public tokensMinted = 0;
     event Mint(address indexed from, uint reward_amount, uint blockCount, bytes32 newChallengeNumber);
-    uint public coins_count;
-    uint public blocks_count;
+    uint public coinsCount;
+    uint public blocksCount;
 
-    constructor (uint _coins_count, uint8 _decimals, uint _blocks_count, uint ownerBalancePercentage) public {
-        coins_count = _coins_count.mul(10**uint(_decimals));
-        blocks_count = _blocks_count;
+    constructor (uint _coinsCount, uint8 _decimals, uint _blocksCount, uint ownerBalancePercentage) public {
+        coinsCount = _coinsCount.mul(10**uint(_decimals));
+        blocksCount = _blocksCount;
         decimals = _decimals;
-        _mint(msg.sender, coins_count.mul(ownerBalancePercentage).div(100));
-        cummulativeEraMaxSupply = coins_count.div(2);
+        _mint(msg.sender, coinsCount.mul(ownerBalancePercentage).div(100));
         miningTarget = _MAXIMUM_TARGET;
         latestDifficultyPeriodStarted = block.number;
         _startNewMiningBlock();
@@ -63,6 +60,8 @@ contract BTLToken is ERC20, Ownable {
     }
 
     function mint(uint256 nonce, bytes32 challenge_digest) public returns (bool success) {
+        require(blockCount <= blocksCount, "All blocks where mined");
+
         //the PoW must contain work that includes a recent ethereum block hash (challenge number) 
         //and the msg.sender's address to prevent MITM attacks
         bytes32 digest = computeMintDigest(challengeNumber, msg.sender, nonce);
@@ -76,6 +75,7 @@ contract BTLToken is ERC20, Ownable {
         //only allow one reward for each challenge
         bytes32 solution = solutionForChallenge[challengeNumber];
         solutionForChallenge[challengeNumber] = digest;
+        // TODO: consider testing below revert
         if(solution != 0x0) revert();  //prevent the same answer from awarding twice
 
         uint reward_amount = getMiningReward();
@@ -83,9 +83,6 @@ contract BTLToken is ERC20, Ownable {
         _mint(msg.sender, reward_amount);
 
         tokensMinted = tokensMinted.add(reward_amount);
-
-        //Cannot mint more tokens than there are
-        assert(tokensMinted <= cummulativeEraMaxSupply);
 
         //set readonly diagnostics data
         lastRewardTo = msg.sender;
@@ -100,14 +97,6 @@ contract BTLToken is ERC20, Ownable {
     }
 
     function _startNewMiningBlock() internal {
-        //40 is the final reward era, almost all tokens minted
-        if(tokensMinted.add(getMiningReward()) > cummulativeEraMaxSupply && rewardEra < 39) {
-            rewardEra = rewardEra + 1;
-        }
-
-        //set the next minted supply at which the era will change
-        cummulativeEraMaxSupply = coins_count - coins_count.div(2**(rewardEra + 1));
-
         blockCount = blockCount.add(1);
 
         //every so often, readjust difficulty. Dont readjust when deploying
@@ -180,24 +169,22 @@ contract BTLToken is ERC20, Ownable {
         return miningTarget;
     }
 
-    //21m coins total
-    //reward begins at 50 and is cut in half every reward era (as tokens are mined)
-    //
-    // Get mining reward for current era
-    function getMiningReward() public view returns (uint) {
-        //once we get half way thru the coins, only get 25 per block
-
-        //every reward era, the reward amount halves.
-        // TODO:
-        return (10**uint(decimals)).div(2**rewardEra);
-    }
-
+    /*
+     * Coin distribution scheme
+     */
     function getBlockReward(uint blockIndex) public view returns (uint) {
-        int N = int(blocks_count);
-        int M = int(coins_count);
+        int N = int(blocksCount);
+        int M = int(coinsCount);
         int numerator = 6*M*(99*(1 - int(blockIndex) * int(blockIndex)) + 100*(N*N - 1));
         int denominator = -99*N*(N+1)*(2*N+1) + 6*N*(100*N*N - 1);
         return uint(numerator / denominator);
+    }
+
+    /* 
+     * Get mining reward for current block
+     */
+    function getMiningReward() public view returns (uint) {
+        return getBlockReward(blockCount);
     }
 
     function checkMintSolution(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number, uint target) 

@@ -17,7 +17,6 @@ contract TestBTLToken {
         Assert.equal(uint(token.decimals()), decimals, "Contract decimal number should match");
         Assert.equal(token.totalSupply(), 0, "Contract total supply should match");
         Assert.equal(token.tokensMinted(), 0, "Contract should start with 0 tokens minted");
-        Assert.equal(token.cummulativeEraMaxSupply(), coins_count * 10 ** decimals / 2, "Wrong cummulativeEraMaxSupply");
     }
 
     function testReward() public {
