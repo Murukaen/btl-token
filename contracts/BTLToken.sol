@@ -6,7 +6,6 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 
 // ----------------------------------------------------------------------------
 // 'BTL Token' contract
-// forked from '0xBitcoin Token' contract
 // Mineable ERC20 Token using Proof Of Work
 //
 // Symbol      : BTL
@@ -24,34 +23,40 @@ library ExtendedMath {
 contract BTLToken is ERC20, Ownable {
     using ExtendedMath for uint;
 
+    // TODO: decide below
+    uint public READJUSTMENT_BLOCK_COUNT = 1024;
+    // TODO: decide below
+    uint public INITIAL_TARGET = 2**234;
+    // TODO: decide below
+    uint public MAX_TARGET_FACTOR = 2**2;
+
     string public symbol = "BTL";
     string public name = "BTL Token";
+
     uint8 public decimals;
-    uint public latestDifficultyPeriodStarted;
-    uint public blockCount;//number of 'blocks' mined
-    uint public _BLOCKS_PER_READJUSTMENT = 1024;
-    //a little number
-    uint public _MINIMUM_TARGET = 2**16;
-    //a big number is easier ; just find a solution that is smaller
-    uint public _MAXIMUM_TARGET = 2**234; // bitcoin uses 224
+    uint public blockCount; //number of blocks mined
     uint public miningTarget;
-    bytes32 public challengeNumber;   //generate a new one when a new reward is minted
+    bytes32 public challengeNumber; //a new one is generated after every block
     address public lastRewardTo;
     uint public lastRewardAmount;
     uint public lastRewardEthBlockNumber;
     mapping(bytes32 => bytes32) solutionForChallenge;
-    uint public tokensMinted = 0;
-    event Mint(address indexed from, uint reward_amount, uint blockCount, bytes32 newChallengeNumber);
+    uint public tokensMinted;
     uint public coinsCount;
     uint public blocksCount;
+    uint blockTime;
+    uint lastBlockTimestamp;
 
-    constructor (uint _coinsCount, uint8 _decimals, uint _blocksCount, uint ownerBalancePercentage) public {
+    event Mint(address indexed from, uint reward_amount, uint blockCount, bytes32 newChallengeNumber);
+
+    constructor (uint _coinsCount, uint8 _decimals, uint _blocksCount, uint _blockTime, uint ownerBalancePercentage) public {
         coinsCount = _coinsCount.mul(10**uint(_decimals));
         blocksCount = _blocksCount;
         decimals = _decimals;
+        blockTime = _blockTime;
         _mint(msg.sender, coinsCount.mul(ownerBalancePercentage).div(100));
-        miningTarget = _MAXIMUM_TARGET;
-        latestDifficultyPeriodStarted = block.number;
+        miningTarget = INITIAL_TARGET;
+        lastBlockTimestamp = block.timestamp;
         _startNewMiningBlock();
     }
 
@@ -100,8 +105,8 @@ contract BTLToken is ERC20, Ownable {
         blockCount = blockCount.add(1);
 
         //every so often, readjust difficulty. Dont readjust when deploying
-        if(blockCount % _BLOCKS_PER_READJUSTMENT == 0) {
-            _reAdjustDifficulty();
+        if(blockCount % READJUSTMENT_BLOCK_COUNT == 0) {
+            readjustDifficulty();
         }
 
         //make the latest ethereum block hash a part of the next challenge for PoW to prevent pre-mining future blocks
@@ -109,49 +114,20 @@ contract BTLToken is ERC20, Ownable {
         challengeNumber = blockhash(block.number - 1);
     }
 
-    //https://en.bitcoin.it/wiki/Difficulty#What_is_the_formula_for_difficulty.3F
-    //as of 2017 the bitcoin difficulty was up to 17 zeroes, it was only 8 in the early days
-
-    //readjust the target by 5 percent
-    function _reAdjustDifficulty() internal {
-        uint ethBlocksSinceLastDifficultyPeriod = block.number - latestDifficultyPeriodStarted;
-        //assume 360 ethereum blocks per hour
-
-        //we want miners to spend 10 minutes to mine each 'block', about 60 ethereum blocks = one 0xbitcoin epoch
-        uint epochsMined = _BLOCKS_PER_READJUSTMENT; //256
-
-        uint targetEthBlocksPerDiffPeriod = epochsMined * 60; //should be 60 times slower than ethereum
-
-        //if there were less eth blocks passed in time than expected
-        if(ethBlocksSinceLastDifficultyPeriod < targetEthBlocksPerDiffPeriod)
-        {
-            uint excess_block_pct = (targetEthBlocksPerDiffPeriod.mul(100)).div( ethBlocksSinceLastDifficultyPeriod );
-
-            uint excess_block_pct_extra = excess_block_pct.sub(100).limitLessThan(1000);
-            // If there were 5% more blocks mined than expected then this is 5.  If there were 100% more blocks mined than expected then this is 100.
-
-            //make it harder
-            miningTarget = miningTarget.sub(miningTarget.div(2000).mul(excess_block_pct_extra));   //by up to 50 %
-        } else {
-            uint shortage_block_pct = (ethBlocksSinceLastDifficultyPeriod.mul(100)).div( targetEthBlocksPerDiffPeriod );
-
-            uint shortage_block_pct_extra = shortage_block_pct.sub(100).limitLessThan(1000); //always between 0 and 1000
-
-          //make it easier
-            miningTarget = miningTarget.add(miningTarget.div(2000).mul(shortage_block_pct_extra));   //by up to 50 %
+    /**
+     * Adjust miningTarget relative to indended blockTime
+     */
+    function readjustDifficulty() internal {
+        uint actualBlockTime = (block.timestamp - lastBlockTimestamp).div(READJUSTMENT_BLOCK_COUNT);
+        uint newTarget = miningTarget.mul(actualBlockTime).div(blockTime);
+        if (newTarget > MAX_TARGET_FACTOR.mul(miningTarget)) {
+            newTarget = MAX_TARGET_FACTOR.mul(miningTarget);
         }
-
-        latestDifficultyPeriodStarted = block.number;
-
-        if(miningTarget < _MINIMUM_TARGET) //very difficult
-        {
-            miningTarget = _MINIMUM_TARGET;
+        if (newTarget < miningTarget.div(MAX_TARGET_FACTOR)) {
+            newTarget = miningTarget.div(MAX_TARGET_FACTOR);
         }
-
-        if(miningTarget > _MAXIMUM_TARGET) //very easy
-        {
-            miningTarget = _MAXIMUM_TARGET;
-        }
+        miningTarget = newTarget;
+        lastBlockTimestamp = block.timestamp;
     }
 
     //this is a recent ethereum block hash, used to prevent pre-mining future blocks
@@ -159,17 +135,11 @@ contract BTLToken is ERC20, Ownable {
         return challengeNumber;
     }
 
-    //the number of zeroes the digest of the PoW solution requires.  Auto adjusts
-    // TODO: review
-    function getMiningDifficulty() public view returns (uint) {
-        return _MAXIMUM_TARGET.div(miningTarget);
-    }
-
     function getMiningTarget() public view returns (uint) {
         return miningTarget;
     }
 
-    /*
+    /**
      * Coin distribution scheme
      */
     function getBlockReward(uint blockIndex) public view returns (uint) {
@@ -180,7 +150,7 @@ contract BTLToken is ERC20, Ownable {
         return uint(numerator / denominator);
     }
 
-    /* 
+    /** 
      * Get mining reward for current block
      */
     function getMiningReward() public view returns (uint) {

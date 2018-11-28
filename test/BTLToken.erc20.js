@@ -8,7 +8,7 @@ contract('BTLToken', function (accounts) {
 
 		// factory method to create new token contract
 		create: async function () {
-			return await BTLToken.new(1000, 2, 100, 50); // allocate 50% of total supply to owner, for testing purposes
+			return await BTLToken.new(1000, 2, 100, 600, 50); // allocate 50% of total supply to owner, for testing purposes
 		},
 
 		// factory callbacks to mint the tokens
