@@ -3,10 +3,19 @@ const BN = require('bn.js')
 const miningHelper = require('./mining-helper.js')
 
 contract('BTLToken', (accounts) => {
+    const COINS_COUNT = 4000000000
+    const DECIMALS_COUNT = 8
+    const BLOCKS_COUNT = 5256000
+    const BLOCK_TIME = 60
+    const DIFFICULTY_READJUSTMENT_BLOCK_COUNT = 1
+    const OWNER_BALANCE_PERCENTAGE = 0
+    const MAX_TARGET_FACTOR = 4
+
     let contract
 
     beforeEach('setup contract for each test', async () => {
-        contract = await BTLToken.deployed() 
+        contract = await BTLToken.new(COINS_COUNT, DECIMALS_COUNT, BLOCKS_COUNT, BLOCK_TIME, 
+            DIFFICULTY_READJUSTMENT_BLOCK_COUNT, OWNER_BALANCE_PERCENTAGE) 
     })
 
     it("initializes the contract with the correct values", async () => {
@@ -42,7 +51,7 @@ contract('BTLToken', (accounts) => {
             assert.ok(/revert/.test(err))
         }
         // look for valid digest
-        await miningHelper.mine(contract, sender)
+        await miningHelper.mine(contract, sender, BLOCK_TIME, MAX_TARGET_FACTOR)
         let balance = await contract.balanceOf.call(sender)
         assert.equal(balance.toNumber(), miningReward.toNumber(), "Balance after mint should equal mining reward")
     })

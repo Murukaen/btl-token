@@ -10,9 +10,11 @@ contract TestBTLToken {
     uint decimals = 2;
     uint blocksCount = 100;
     uint blockTime = 600;
+    uint diffcultyReadjustmentBlockCount = 2;
     
     function testContractInitialProps() public {
-        BTLToken token = new BTLToken(coinsCount, uint8(decimals), blocksCount, blockTime, 0);
+        BTLToken token = new BTLToken(coinsCount, uint8(decimals), blocksCount, blockTime, 
+            diffcultyReadjustmentBlockCount, 0);
         Assert.equal(token.name(), "BTL Token", "Contract name should match");     
         Assert.equal(token.symbol(), "BTL", "Contract symbol should match");
         Assert.equal(uint(token.decimals()), decimals, "Contract decimal number should match");
@@ -21,7 +23,8 @@ contract TestBTLToken {
     }
 
     function testReward() public {
-        BTLToken token = new BTLToken(coinsCount, uint8(decimals), blocksCount, blockTime, 0);
+        BTLToken token = new BTLToken(coinsCount, uint8(decimals), blocksCount, blockTime, 
+            diffcultyReadjustmentBlockCount, 0);
         Assert.equal(token.getBlockReward(1), 1503, "Reward for block 1 shld match");
         Assert.equal(token.getBlockReward(2), 1503, "Reward for block 2 shld match");
         Assert.equal(token.getBlockReward(3), 1502, "Reward for block 3 shld match");

@@ -24,8 +24,6 @@ contract BTLToken is ERC20, Ownable {
     using ExtendedMath for uint;
 
     // TODO: decide below
-    uint public READJUSTMENT_BLOCK_COUNT = 1024;
-    // TODO: decide below
     uint public INITIAL_TARGET = 2**234;
     // TODO: decide below
     uint public MAX_TARGET_FACTOR = 2**2;
@@ -44,20 +42,23 @@ contract BTLToken is ERC20, Ownable {
     uint public tokensMinted;
     uint public coinsCount;
     uint public blocksCount;
-    uint blockTime;
-    uint lastBlockTimestamp;
+    uint public blockTime;
+    uint public lastBlockTimestamp;
+    uint public difficultyReadjustmentBlockCount;
 
     event Mint(address indexed from, uint reward_amount, uint blockCount, bytes32 newChallengeNumber);
 
-    constructor (uint _coinsCount, uint8 _decimals, uint _blocksCount, uint _blockTime, uint ownerBalancePercentage) public {
+    constructor (uint _coinsCount, uint8 _decimals, uint _blocksCount, uint _blockTime, 
+        uint _difficultyReadjustmentBlockCount, uint ownerBalancePercentage) public {
         coinsCount = _coinsCount.mul(10**uint(_decimals));
         blocksCount = _blocksCount;
         decimals = _decimals;
         blockTime = _blockTime;
+        difficultyReadjustmentBlockCount = _difficultyReadjustmentBlockCount;
         _mint(msg.sender, coinsCount.mul(ownerBalancePercentage).div(100));
         miningTarget = INITIAL_TARGET;
-        lastBlockTimestamp = block.timestamp;
-        _startNewMiningBlock();
+        lastBlockTimestamp = now;
+        startNewMiningBlock();
     }
 
     function computeMintDigest(bytes32 challenge_number, address addr, uint nonce) public pure returns (bytes32 digest) {
@@ -94,20 +95,20 @@ contract BTLToken is ERC20, Ownable {
         lastRewardAmount = reward_amount;
         lastRewardEthBlockNumber = block.number;
 
-        _startNewMiningBlock();
+        startNewMiningBlock();
 
         emit Mint(msg.sender, reward_amount, blockCount, challengeNumber);
 
         return true;
     }
 
-    function _startNewMiningBlock() internal {
-        blockCount = blockCount.add(1);
-
+    function startNewMiningBlock() internal {
         //every so often, readjust difficulty. Dont readjust when deploying
-        if(blockCount % READJUSTMENT_BLOCK_COUNT == 0) {
+        if(blockCount > 0 && blockCount % difficultyReadjustmentBlockCount == 0) {
             readjustDifficulty();
         }
+
+        blockCount = blockCount.add(1);
 
         //make the latest ethereum block hash a part of the next challenge for PoW to prevent pre-mining future blocks
         //do this last since this is a protection mechanism in the mint() function
@@ -118,7 +119,7 @@ contract BTLToken is ERC20, Ownable {
      * Adjust miningTarget relative to indended blockTime
      */
     function readjustDifficulty() internal {
-        uint actualBlockTime = (block.timestamp - lastBlockTimestamp).div(READJUSTMENT_BLOCK_COUNT);
+        uint actualBlockTime = (now - lastBlockTimestamp).div(difficultyReadjustmentBlockCount);
         uint newTarget = miningTarget.mul(actualBlockTime).div(blockTime);
         if (newTarget > MAX_TARGET_FACTOR.mul(miningTarget)) {
             newTarget = MAX_TARGET_FACTOR.mul(miningTarget);
@@ -127,7 +128,7 @@ contract BTLToken is ERC20, Ownable {
             newTarget = miningTarget.div(MAX_TARGET_FACTOR);
         }
         miningTarget = newTarget;
-        lastBlockTimestamp = block.timestamp;
+        lastBlockTimestamp = now;
     }
 
     //this is a recent ethereum block hash, used to prevent pre-mining future blocks
