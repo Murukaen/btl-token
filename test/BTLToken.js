@@ -26,7 +26,7 @@ contract('BTLToken', (accounts) => {
     })
 
     it("mints coins", async () => {
-        const challengeNumber = await contract.getChallengeNumber.call() // string
+        const challengeNumber = await contract.challengeNumber.call() // string
         const receivedMininingReward = await contract.getMiningReward.call()
         const miningReward = new BN(receivedMininingReward.toString(16), 16)
         const sender = accounts[0]

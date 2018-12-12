@@ -12,25 +12,14 @@ import "openzeppelin-solidity/contracts/token/ERC20/ERC20.sol";
 // Name        : BTL Token
 // ----------------------------------------------------------------------------
 
-library ExtendedMath {
-    //return the smaller of the two inputs (a or b)
-    function limitLessThan(uint a, uint b) internal pure returns (uint c) {
-        if(a > b) return b;
-        return a;
-    }
-}
-
 contract BTLToken is ERC20, Ownable {
-    using ExtendedMath for uint;
-
     // TODO: decide below
     uint public INITIAL_TARGET = 2**234;
     // TODO: decide below
+    // Max factor to be applied as an update to the mining target from a dificulty recalibration
     uint public MAX_TARGET_FACTOR = 2**2;
-
     string public symbol = "BTL";
     string public name = "BTL Token";
-
     uint8 public decimals;
     uint public blockCount; //number of blocks mined
     uint public miningTarget;
@@ -38,13 +27,12 @@ contract BTLToken is ERC20, Ownable {
     address public lastRewardTo;
     uint public lastRewardAmount;
     uint public lastRewardEthBlockNumber;
-    mapping(bytes32 => bytes32) solutionForChallenge;
     uint public tokensMinted;
     uint public coinsCount;
     uint public blocksCount;
     uint public blockTime;
-    uint public lastBlockTimestamp;
-    uint public difficultyReadjustmentBlockCount;
+    uint private lastBlockTimestamp;
+    uint private difficultyReadjustmentBlockCount;
 
     event Mint(address indexed from, uint reward_amount, uint blockCount, bytes32 newChallengeNumber);
 
@@ -65,7 +53,7 @@ contract BTLToken is ERC20, Ownable {
         digest = keccak256(abi.encodePacked(challenge_number,addr,nonce));
     }
 
-    function mint(uint256 nonce, bytes32 challenge_digest) public returns (bool success) {
+    function mint(uint256 nonce, bytes32 challenge_digest) external returns (bool success) {
         require(blockCount <= blocksCount, "All blocks where mined");
 
         //the PoW must contain work that includes a recent ethereum block hash (challenge number) 
@@ -73,16 +61,10 @@ contract BTLToken is ERC20, Ownable {
         bytes32 digest = computeMintDigest(challengeNumber, msg.sender, nonce);
 
         //the challenge digest must match the expected
-        if (digest != challenge_digest) revert("Digest mismatch");
+        require(digest == challenge_digest, "Digest mismatch");
 
         //the digest must be smaller than the target
-        if(uint256(digest) > miningTarget) revert("Digest is not within required bounds");
-
-        //only allow one reward for each challenge
-        bytes32 solution = solutionForChallenge[challengeNumber];
-        solutionForChallenge[challengeNumber] = digest;
-        // TODO: consider testing below revert
-        if(solution != 0x0) revert();  //prevent the same answer from awarding twice
+        require(uint256(digest) <= miningTarget, "Digest is not within required bounds");
 
         uint reward_amount = getMiningReward();
 
@@ -131,15 +113,6 @@ contract BTLToken is ERC20, Ownable {
         lastBlockTimestamp = now;
     }
 
-    //this is a recent ethereum block hash, used to prevent pre-mining future blocks
-    function getChallengeNumber() public view returns (bytes32) {
-        return challengeNumber;
-    }
-
-    function getMiningTarget() public view returns (uint) {
-        return miningTarget;
-    }
-
     /**
      * Coin distribution scheme
      */
@@ -158,17 +131,19 @@ contract BTLToken is ERC20, Ownable {
         return getBlockReward(blockCount);
     }
 
+    /**
+     * Helper function to validate digest relative to a target   
+     */
     function checkMintSolution(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number, uint target) 
-        public view returns (bool success) {
-
+        external pure returns (bool success) {
         bytes32 digest = computeMintDigest(challenge_number, msg.sender, nonce);
         require(uint(digest) <= target, "Digest is out of target");
         return (digest == challenge_digest);
     }
 
-    // ------------------------------------------------------------------------
-    // Don't accept ETH
-    // ------------------------------------------------------------------------
+    /**
+     * Don't let contract accept direct ETH payments
+     */
     function () public payable {
         revert("Doesn't accept eth");
     }

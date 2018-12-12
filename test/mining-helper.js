@@ -16,8 +16,8 @@ module.exports = {
         return Math.max(min, Math.min(max, x));
     },
     async mine(contract, sender, blockTime, maxTargetFactor, tries = 10 ** 7) {
-        const challengeNumber = await contract.getChallengeNumber.call() // string
-        const receivedMiningTarget = await contract.getMiningTarget.call() // BigNumber
+        const challengeNumber = await contract.challengeNumber.call() // string
+        const receivedMiningTarget = await contract.miningTarget.call() // BigNumber
         const miningTarget = this.bigNumberToBN(receivedMiningTarget) 
         const receivedMininingReward = await contract.getMiningReward.call()
         const miningReward = this.bigNumberToBN(receivedMininingReward)
@@ -29,8 +29,6 @@ module.exports = {
         console.log("miningTarget: ", miningTarget.toString(16))
         console.log("miningReward: ", miningReward.toString(16))
         console.log("tokensMinted: ", tokensMinted.toString(16))
-        console.log("lastBlockTimestamp: ", 
-            this.bigNumberToBN(await contract.lastBlockTimestamp.call()).toString(16))
         console.log("prevBlockTimestamp: ", prevBlockTimestamp)
         const step = tries / 100
         let solutionFound = false
@@ -51,7 +49,7 @@ module.exports = {
                 console.log("Block time taken:", blockTimestamp - prevBlockTimestamp)
                 let factor = (blockTimestamp - prevBlockTimestamp) / blockTime
                 factor = this.clamp(factor, 1/maxTargetFactor, maxTargetFactor)
-                const newMiningTarget = this.bigNumberToBN(await contract.getMiningTarget.call())
+                const newMiningTarget = this.bigNumberToBN(await contract.miningTarget.call())
                 console.log("newMiningTarget: ", newMiningTarget.toString(16))
                 assert.equal(newMiningTarget, miningTarget * factor, "Mining target is not appropriately adjusted")
                 solutionFound = true
