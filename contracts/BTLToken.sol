@@ -135,7 +135,7 @@ contract BTLToken is ERC20, Ownable {
      * Helper function to validate digest relative to a target   
      */
     function checkMintSolution(uint256 nonce, bytes32 challenge_digest, bytes32 challenge_number, uint target) 
-        external pure returns (bool success) {
+        external view returns (bool success) {
         bytes32 digest = computeMintDigest(challenge_number, msg.sender, nonce);
         require(uint(digest) <= target, "Digest is out of target");
         return (digest == challenge_digest);
